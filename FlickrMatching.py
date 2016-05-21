@@ -8,7 +8,7 @@ import requests
 import flickrapi
 import json
 from StringIO import StringIO
-from PIL import Image
+from PIL import Image, ImageFilter
 import ConfigParser as config
 from bs4 import BeautifulSoup
 from itertools import product
@@ -84,18 +84,19 @@ def photo_walk(flickr,**kwargs):
             break
     return photos
 
-def normalize_photos(im1,im2):
+def normalize_photos(im1,im2,h=None,w=None):
     """
         Normalizes to PIL image objects by setting them to mode 'L' and setting the sizes equal
-        INPUT: two PIL image objects
+        INPUT: two PIL image objects, OPTIONAL height and width to resize the images
         OUTPUT: normalized images as numpy arrays
     """
     h1,w1=im1.size
     h2,w2=im2.size
-    
-    max_h,max_w = max(h1,h2),max(w1,w2)
-    adj1 = np.array(im1.resize((max_h,max_w)).convert('L'))
-    adj2 = np.array(im2.resize((max_h,max_w)).convert('L'))
+
+    #if a height and width are not given, use the max height and width of the photos
+    if not h and w: h,w = max(h1,h2),max(w1,w2)
+    adj1 = np.array(im1.resize((h,w)).convert('L'))
+    adj2 = np.array(im2.resize((h,w)).convert('L'))
     
     return adj1,adj2
 
@@ -113,7 +114,7 @@ def image_correlation(im1,im2):
     return np.correlate(arr1,arr2).item()
 
 
-def compare_photos(filename,photo):
+def compare_photos(filename,photos):
     """
         Compares a modified image to a flickr API result
         INPUT: File name of a modified image, dict of flickr API search result
@@ -123,36 +124,53 @@ def compare_photos(filename,photo):
     """
     f = os.path.basename(filename)
     #define the results csv line as the base file name and the flickr static url
-    
-    
-    PHOTO='https://farm%s.staticflickr.com/%s/%s_%s.jpg' % (photo['farm'],
-                                                            photo['server'],
-                                                            photo['id'],
-                                                            photo['secret'])
+    max_corr=0
+    best_pick=None
+    for photo in photos:
+        PHOTO='https://static.flickr.com/%s/%s_%s.jpg' % (photo['server'],photo['id'],photo['secret'])
 
-    
-    #get the image data from Flickr
-    r = requests.get(PHOTO)
-    im1 = Image.open(StringIO(r.content))
-    #load the file image
-    im2=Image.open(filename)
+        
+        #get the image data from Flickr
+        r = requests.get(PHOTO)
+        im1 = Image.open(StringIO(r.content))
+        #load the file image
+        im2=Image.open(filename)
 
-    #if the images are highly correlated return a line of text with the two image uri's
-    if image_correlation(*normalize_photos(im1,im2)) >= 40:
-        return f+','+PHOTO
+        transformations = [Image.FLIP_LEFT_RIGHT,
+                           Image.FLIP_TOP_BOTTOM,
+                           Image.ROTATE_90,
+                           Image.ROTATE_180,
+                           Image.ROTATE_270]
+
+        
+        
+        #shrink both photos down to 100X100 pixels, convert to luminance values
+        norm1,norm2 = normalize_photos(im1,im2,h=100,w=100)
+        
+        #if the images are already highly correlated return a line of text with the two image uri's
+        if image_correlation(norm1,norm2) >= max_corr:
+            best_pick=PHOTO
+            max_corr = image_correlation(norm1,norm2)
+        #iterate through different transformations and compare correlation
+        for t in transformations:
+            new_img = np.array(Image.fromarray(norm2).transpose(t))#perform a transformation on the image
+            if image_correlation(norm1,new_img) >= max_corr:
+                best_pick=PHOTO
+                max_corr = image_correlation(norm1,new_img)
+    return f+','+best_pick+'\n'
     
     
-    
-    
+     
 if __name__=='__main__':
-    #get a list of photo data based on search (test with 1000 images)
+    #get a list of photo data based on search
     start=dt.datetime.now()
     flickr = flickrapi.FlickrAPI(key, secret, format='json')
     
     photos = photo_walk(flickr,user_id=user,tags=tags,per_page=500)
     print "%d images collected. Collection runtime: %s" % (len(photos),str(dt.datetime.now()-start))
 
-    results = [compare_photos(os.path.join(MODIFIED,filename),photo) for filename,photo in product(os.listdir(MODIFIED),photos)]
+    #run on the first 10 photos for testing
+    results =[compare_photos(os.path.join(MODIFIED,filename),photos) for filename in os.listdir(MODIFIED)[:10]]
     with open('results.csv','w') as out:
         out.writelines(results)
     print "Done writing comparing images. Total runtime: %s" % str(dt.datetime.now()-start)
