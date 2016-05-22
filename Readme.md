@@ -4,7 +4,7 @@ Katherine Shelley
 
 ## How to Run
 
-To run FlickrMatching, clone this repo and run `pip install requirements.txt` to download the dependencies. This code depends on a number of Python libraries such as numpy, scipy, matplotlib, PIL, and flickrapi.
+To run FlickrMatching, clone this repo and run `pip install -r requirements.txt` to download the dependencies. This code depends on a number of Python libraries such as numpy, scipy, matplotlib, PIL, and flickrapi.
 
 Enter your Flickr API key, secret key, a Flickr username, and photo tags to search in `flickr_config.ini`.
 
