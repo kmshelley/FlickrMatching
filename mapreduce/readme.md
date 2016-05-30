@@ -1,6 +1,6 @@
 # MapReduce photo comparison
 
-Runs the photo cross comparisons as a Hadoop streaming job with an input TXT file of all pairs of photos (modified vs. original). Requires both sets of photos to be available as JAR archives `original.jar` and `modified.jar`.
+Runs the photo cross comparisons as a Hadoop streaming job with an input TXT file of all pairs of photos (modified vs. original). Requires both sets of photos to be available as JAR archives `original.jar` and `modified.jar`. The JAR files are not available in this repo due to size restrictions.
 
 First, clone this repo. Then unzip and move the TXT file `to_process.txt` to HDFS with the following commands:
 
